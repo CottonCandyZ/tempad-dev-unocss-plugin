@@ -1,5 +1,6 @@
 import { toUnocssClass } from 'transform-to-unocss-core'
 import { resolveColorTokenName } from './color-tokens'
+import settings from './settings.json'
 
 interface CssVarUsage {
   name: string
@@ -40,8 +41,7 @@ function parseCssVars(value: string): CssVarUsage[] {
 
   while (offset < value.length) {
     const start = value.indexOf('var(', offset)
-    if (start === -1)
-      break
+    if (start === -1) break
 
     let cursor = start + 4
     let depth = 1
@@ -49,17 +49,14 @@ function parseCssVars(value: string): CssVarUsage[] {
       const char = value[cursor]
       if (char === '(') {
         depth++
-      }
-      else if (char === ')') {
+      } else if (char === ')') {
         depth--
-        if (depth === 0)
-          break
+        if (depth === 0) break
       }
       cursor++
     }
 
-    if (depth !== 0)
-      break
+    if (depth !== 0) break
 
     const end = cursor + 1
     const content = value.slice(start + 4, cursor)
@@ -79,8 +76,7 @@ function parseCssVars(value: string): CssVarUsage[] {
 }
 
 function replaceVarFallbacks(value: string, vars: CssVarUsage[]) {
-  if (!vars.length)
-    return value
+  if (!vars.length) return value
 
   let result = ''
   let lastIndex = 0
@@ -88,10 +84,8 @@ function replaceVarFallbacks(value: string, vars: CssVarUsage[]) {
   for (const cssVar of vars) {
     result += value.slice(lastIndex, cssVar.start)
 
-    if (cssVar.fallback)
-      result += cssVar.fallback
-    else
-      result += value.slice(cssVar.start, cssVar.end)
+    if (cssVar.fallback) result += cssVar.fallback
+    else result += value.slice(cssVar.start, cssVar.end)
 
     lastIndex = cssVar.end
   }
@@ -100,10 +94,13 @@ function replaceVarFallbacks(value: string, vars: CssVarUsage[]) {
   return result
 }
 
-function replaceFallbackWithToken(className: string, fallback: string, token: string) {
+function replaceFallbackWithToken(
+  className: string,
+  fallback: string,
+  token: string,
+) {
   const trimmed = fallback.trim()
-  if (!trimmed)
-    return className
+  if (!trimmed) return className
 
   const variants = new Set<string>()
   variants.add(trimmed)
@@ -117,8 +114,7 @@ function replaceFallbackWithToken(className: string, fallback: string, token: st
 
   let next = className
   for (const variant of variants) {
-    if (!variant)
-      continue
+    if (!variant) continue
 
     const escaped = escapeRegExp(variant)
     const bracketPattern = new RegExp(`\\[\\s*${escaped}\\s*\\]`, 'g')
@@ -138,19 +134,17 @@ function replaceVarExpressions(className: string, name: string, token: string) {
 }
 
 function cleanupBracketTokens(className: string) {
-  return className.replace(/\[([A-Za-z0-9_-]+)\]/g, '$1')
+  return className.replace(/\[([\w-]+)\]/g, '$1')
 }
 
 function applyTokenReplacements(className: string, vars: CssVarUsage[]) {
-  if (!className || !vars.length)
-    return className
+  if (!className || !vars.length) return className
 
   let next = className
 
   for (const cssVar of vars) {
     const tokenName = resolveColorTokenName(cssVar.name)
-    if (!tokenName)
-      continue
+    if (!tokenName) continue
 
     if (cssVar.fallback)
       next = replaceFallbackWithToken(next, cssVar.fallback, tokenName)
@@ -163,15 +157,13 @@ function applyTokenReplacements(className: string, vars: CssVarUsage[]) {
 
 function formatNumber(value: number) {
   const rounded = Number(value.toFixed(6))
-  if (Number.isInteger(rounded))
-    return Math.trunc(rounded).toString()
+  if (Number.isInteger(rounded)) return Math.trunc(rounded).toString()
 
   return rounded.toString().replace(/\.?0+$/, '')
 }
 
 function normalizeUnoClass(className: string, hasPx: boolean) {
-  if (!className)
-    return className
+  if (!className) return className
 
   let next = className
 
@@ -202,10 +194,12 @@ function normalizeUnoClass(className: string, hasPx: boolean) {
 
 export function transformToAtomic(
   style: Record<string, string>,
-  options: { engine: 'unocss' | 'tailwind'; isRem: boolean; prefix: string },
+  options: { isRem: boolean; prefix: string },
 ) {
-  const { engine = 'unocss', isRem = false, prefix = '' } = options
-  const raw = Object.entries(style)
+  const { isRem = false, prefix = '' } = options
+  const raw = Object.entries(style).filter(
+    ([key]) => !settings.noNeedStylesKey.includes(key),
+  )
 
   const prepared = raw.map(([key, value]) => {
     const withoutComments = value.replace(/\/\*.*\*\//g, '')
@@ -223,12 +217,16 @@ export function transformToAtomic(
     }
   })
 
-  const cssCode = prepared.map(({ key, cssValue }) => `${key}: ${cssValue};`).join('\n')
+  const cssCode = prepared
+    .map(({ key, cssValue }) => `${key}: ${cssValue};`)
+    .join('\n')
 
   const uno = prepared
     .map(({ unoClass, hasPx, cssVars }) => {
       const normalized = normalizeUnoClass(unoClass, hasPx)
-      return normalized ? applyTokenReplacements(normalized, cssVars) : normalized
+      return normalized
+        ? applyTokenReplacements(normalized, cssVars)
+        : normalized
     })
     .filter(Boolean)
     .map((cls) => `${prefix}${cls}`)

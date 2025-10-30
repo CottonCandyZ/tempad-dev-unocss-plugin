@@ -1,6 +1,6 @@
 export interface ColorTokenRule {
   test: RegExp
-  resolve(match: RegExpMatchArray): string
+  resolve: (match: RegExpMatchArray) => string
 }
 
 function createRule(pattern: RegExp, resolver: (match: RegExpMatchArray) => string): ColorTokenRule {

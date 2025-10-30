@@ -9,7 +9,6 @@ export default definePlugin({
       lang: 'text' as 'css',
       transform({ style, options: { useRem } }) {
         return transformToAtomic(style, {
-          engine: 'unocss',
           isRem: useRem,
           prefix: '',
         }).uno
